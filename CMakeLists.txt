@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(CurveFitter VERSION 1.0 LANGUAGES CXX)
 
 option(CURVEFITTER_ENABLE_STRING_FORMULAS "Enable string formulas using Qt Qml" OFF)
+option(CURVEFITTER_BUILD_EXAMPLES "Build the CurveFitter example program" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,5 +31,7 @@ if(BUILD_TESTING)
     add_test(NAME curvefitter_tests COMMAND curvefitter_tests)
 endif()
 
-add_executable(curvefitter_example examples/main.cpp)
-target_link_libraries(curvefitter_example PRIVATE curvefitter)
+if(CURVEFITTER_BUILD_EXAMPLES)
+    add_executable(curvefitter_example examples/main.cpp)
+    target_link_libraries(curvefitter_example PRIVATE curvefitter)
+endif()

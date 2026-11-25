@@ -13,7 +13,6 @@ Java 仅用于重新生成对照数据，库及常规测试不需要 Java 或联
 cmake -S . -B build/Qt_5_15_15-Debug -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/Qt_5_15_15-Debug -j2
 ctest --test-dir build/Qt_5_15_15-Debug --output-on-failure
-./build/Qt_5_15_15-Debug/curvefitter_example
 ```
 
 当前云环境的开发包安装在工作区，配置时需指定：
@@ -24,6 +23,17 @@ ctest --test-dir build/Qt_5_15_15-Debug --output-on-failure
 ```
 
 同目录提供 `cmake` 与 `ctest`。已实测 Qt 5.15.15 / GCC 14；Qt 6 尚未实测。代码按仓库 `.clang-format` 格式化，并按 AGENTS 手动检查函数间距和逻辑分段。
+
+### 可选：示例程序
+
+默认不构建示例，不影响库和单元测试。通过 `-DCURVEFITTER_BUILD_EXAMPLES=ON` 启用：
+
+```sh
+cmake -S . -B build/Qt_5_15_15-Debug -DCMAKE_BUILD_TYPE=Debug \
+  -DCURVEFITTER_BUILD_EXAMPLES=ON
+cmake --build build/Qt_5_15_15-Debug --target curvefitter_example
+./build/Qt_5_15_15-Debug/curvefitter_example
+```
 
 ### 可选：字符串公式
 
