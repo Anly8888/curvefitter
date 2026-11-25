@@ -1,10 +1,12 @@
 # CurveFitter — Qt/C++
 
-将 ImageJ `ij.measure.CurveFitter` 的数值拟合能力移植为 C++17 / Qt Core 库，无 GUI、Java 或第三方数学库运行时依赖。
+按 ImageJ 原版数值流程移植 `ij.measure.CurveFitter` 与 `ij.measure.Minimizer`。此前简化的 Nelder–Mead 和多项式 QR 路径已删除；全部模型统一使用原版的回归消元、单纯形及参数转换流程。
 
-## 构建
+## 构建与测试
 
-需要 CMake ≥ 3.16、C++17 编译器和 Qt 5/6 Core 开发包。例如 Debian/Ubuntu 安装 `cmake qtbase5-dev` 或 `cmake qt6-base-dev`。
+需要 C++17、CMake ≥ 3.16、Qt 5/6 Core、Qml；单元测试使用 Qt Test。原生界面适配另外使用 Qt Widgets，默认构建，可通过 `-DCURVEFITTER_BUILD_WIDGETS=OFF` 关闭。
+
+Debian/Ubuntu 开发依赖为 `cmake qtbase5-dev qtdeclarative5-dev`。Java 仅用于重新生成对照数据，库及常规测试不需要 Java 或联网。
 
 ```sh
 cmake -S . -B build/Qt_5_15_15-Debug -DCMAKE_BUILD_TYPE=Debug
@@ -13,51 +15,74 @@ ctest --test-dir build/Qt_5_15_15-Debug --output-on-failure
 ./build/Qt_5_15_15-Debug/curvefitter_example
 ```
 
-在当前云环境中，开发包安装于工作区，配置命令需额外指定：
+当前云环境的开发包安装在工作区，配置时需指定：
 
 ```sh
 /workspace/tools/python/cmake/data/bin/cmake -S . -B build/Qt_5_15_15-Debug \
   -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=/workspace/tools/qt5/usr
 ```
 
-同目录下提供 `cmake` 和 `ctest`。已验证 Qt 5.15.15 / GCC 14；CMake 支持发现 Qt 6，但本次未在 Qt 6 下验证。
+同目录提供 `cmake` 与 `ctest`。已实测 Qt 5.15.15 / GCC 14；Qt 6 尚未实测。代码按仓库 `.clang-format` 格式化，并按 AGENTS 手动检查函数间距和逻辑分段。
 
-## 使用
+## 拟合接口
 
 ```cpp
 #include "curvefitter.h"
 
-CurveFitter fit({0, 1, 2, 3}, {2, 5, 8, 11});
-fit.doFit(CurveFitter::STRAIGHT_LINE);
-if (fit.getStatus() == CurveFitter::SUCCESS) {
-    auto p = fit.getParams(); // a=2, b=3；最后一项为目标函数 SSE
-    double prediction = fit.f(p, 4); // 14
+CurveFitter fitter({0, 1, 2, 3}, {2, 5, 8, 11});
+fitter.doFit(CurveFitter::STRAIGHT_LINE);
+if (fitter.getStatus() == Minimizer::SUCCESS) {
+    auto p = fitter.getParams(); // a=2、b=3；末尾为原版定义的 SSE
+    double predicted = fitter.f(4); // 14
 }
 ```
 
-集成到其他 CMake 项目：`add_subdirectory(curvefitter)`，然后 `target_link_libraries(your_target PRIVATE curvefitter)`。
+CMake 集成：`add_subdirectory(curvefitter)` 后链接 `curvefitter`。支持原版全部 25 种模型编号、公式与参数顺序，提供原始数据、残差、SSE、标准差、R²、拟合优度、宏公式文本和结果报告。
 
-- 保留全部 25 种模型编号、公式及参数顺序：直线，2–8 次多项式，指数、幂、对数，Rodbard/逆 Rodbard，Gamma Variate，高斯，指数恢复，Chapman-Richards，误差函数。
-- `setWeights()` 接收与原始输入等长的有限非负权重；零权重点不参与拟合。构造时过滤含 NaN 的点对，权重按原始索引对应；无穷值会使拟合失败。
-- 非线性模型使用自动初值；复杂数据可用 `setInitialParameters()`、`setInitialParamVariations()` 设置初值与正步长。每次拟合继续使用这些设置，切换参数个数时需清空或重新设置。
-- `doCustomFit()` 接受 `std::function<double(const QVector<double>&, double)>`、参数个数、说明文本、完整初值及可选步长。回调应无副作用，不能修改拟合器；异常向调用者传播。
-- 拟合后读取状态，再使用参数、残差、SSE、R²、拟合优度、残差标准差及文本报告。`MAX_ITERATIONS` 时保留找到的有限最优解，调用者决定是否接受。
-- 输入长度、模型编号及配置错误抛出 `std::invalid_argument`；空数据、点数不足、全零权重、奇异数据或模型定义域不兼容返回 `INITIALIZATION_FAILURE`。
+- `setInitialParameters()`、`setInitialParamVariations()` 设置初值及变化尺度；省略时按原版估计。空 Qt 数组对应 Java 的 `null`。
+- `setWeights()` 沿用原版权重数组和计算顺序，不剔除零权重点。权重与拟合使用的数据顺序一致；输入中的 NaN 点对在构造时过滤，建议调用者在传入权重前统一清洗数据。权重通常取 `1/error²`。
+- 回调形式的 `doCustomFit()` 接受 `std::function<double(const QVector<double>&, double)>`。通过 `setOffsetMultiplySlopeParams()` 指定可由回归直接求出的偏移、乘法因子或斜率。
+- `getMinimizer()` 返回实际使用的优化器引用，可设置随机种子、最大线程数、参数分辨率、重启次数及迭代上限，也可调用 `abort()`。
+- 为遵循上游，每个实例保留拟合器和优化器的原始状态生命周期；独立实验或需要清零迭代计数时，创建新实例。配置与结果访问不要与正在运行的拟合并发，`abort()` 可跨线程调用。
 
-## 与 ImageJ 的对应及差异
+## Minimizer
 
-这是一份数值能力移植，不是 Java 类的逐行翻译或二进制兼容实现。
+`minimizer.h` 可独立使用。目标函数接收可修改参数数组，前 n 项是搜索参数，第 n 项留给目标值；额外元素通过 `setExtraArrayElements()` 分配，供目标函数保存辅助结果。
 
-- 多项式用中心化、缩放后的 Householder QR 求解，再转换回原坐标的系数；非线性模型使用确定性的 Nelder–Mead，并解析消去最多两个线性参数。未移植 ImageJ `Minimizer` 的多线程、随机重启、ESC 中止和状态编号，收敛路径、迭代数及局部极值可能不同。每个实例同步运行，独立实例可并行使用。
-- `EXP_REGRESSION` / `POWER_REGRESSION` 在对数空间拟合；允许同号的负 y。幂回归忽略 `(0,0)` 并要求正指数。`RODBARD2` 按 NIH Image 语义交换 x/y 拟合。上述三类的 SSE、R² 和拟合优度针对实际拟合空间，残差针对原始数据。
-- `GAUSSIAN` 的参数 `b` 是峰值，`a` 是基线；不是直接把 `b` 当振幅。宽度归一化为正，ERF 的负宽度通过翻转幅度归一化。
-- 未提供 ImageJ 宏语言字符串执行、设置弹窗、Plot 对象及 ImageJ 插件接口。自定义模型使用 C++ 回调，绘图可直接使用原始数据与 `f()` 采样值。
-- `getParams()` 返回参数及末尾 SSE；本库状态枚举仅含成功、初始化失败、达到迭代上限。R² 的常量数据约定与 ImageJ 一致，返回 0。
-- 本库至少要求有效点数等于参数数；不接受欠定拟合。零权重点在计算前过滤。重复 x 或不可辨识参数应由调用者检查；本库不提供置信区间或参数协方差。
+保留了原版的：
 
-## 验证与来源
+- 与 `java.util.Random` 相同的 48 位随机数算法和 `nextFloat` / `nextDouble` 顺序；随机正交单纯形与 NaN 定义域搜索。
+- 反射、扩张、内外收缩、整体缩小、中心点检查、误差判定及参数分辨率判定。
+- 单次搜索的 40% 迭代预算、保持最优顶点的重初始化、按单纯形尺度估计新变化范围。
+- 双线程重复搜索、单线程回退、重启时的种子偏移、两个相同最优目标值的接受条件、额外数组元素。
+- 六种状态码：成功 0、初始化失败 1、中止 2、重初始化失败 3、迭代超限 4、重启超限 5。`MAX_ITERATIONS` 保留为状态 4 的兼容别名。
 
-CTest 运行一个测试程序，覆盖 25 种模型的默认/显式初值拟合、预测恢复、NaN 过滤、零权重、负 y 对数回归、幂回归原点、非法定义域、自定义函数、奇异直线及迭代上限。带噪指数参数另与 SciPy `least_squares` 独立参考值比较。当前共 1567 个检查通过；尚未进行 Java ImageJ 运行时的逐项差分测试，也不承诺任意数据均收敛到全局最优。
+目标函数在定义域外应返回 NaN；这是原版优化器的算法输入，不能替换成大罚值。多线程目标函数须线程安全。原版双线程共享控制状态在 C++ 中使用原子变量和互斥锁，避免数据竞争；并行调度及不同平台数学库仍可能带来末位差异，不能保证跨语言逐位相同或任意问题全局收敛。
 
-上游：[ImageJ CurveFitter.java](https://github.com/imagej/ImageJ/blob/master/ij/measure/CurveFitter.java)，本次读取文件的 SHA-256：`b71fc14eb53560bba71e8921653b0dcbafaf9f06d43edf4e7cd35f571365aced`。
-保留了上游公有领域声明，见 [imagej-license.txt](imagej-license.txt)。
+## ImageJ 宿主功能的 Qt 适配
+
+- `doCustomFit("y=a+b*Math.exp(c*x)", initial)` 使用 Qt `QJSEngine` 执行数值公式，支持常用裸数学函数名及 `Math.erf`。参数按原版 `a...f` 识别，公式拟合强制单线程。这里适配的是数值公式；ImageJ 图像处理、窗口、插件等宿主宏命令不属于 Qt 环境，不提供整个 ImageJ 宏运行时。
+- `CurveFitterWidgets::install(fitter, statusLabel, parent)` 安装 Qt 设置对话框、状态标签和 ESC 中止。然后可调用 `doFit(type, true)`。取消设置后继续使用原参数拟合，与原版相同。安装适配器及设置弹窗必须在 GUI 线程进行，耗时拟合应在工作线程执行。
+- 无界面应用可用 `setSettingsCallback()` 和 `Minimizer::setStatusCallbacks()` 接入自己的设置/状态系统；未提供设置接口时请求弹窗会显式报错。
+- `getPlot()` 返回与原版相同采样规则的 `PlotData`（含 256 灰阶特例），`CurvePlotWidget` 提供 Qt 曲线、散点和参数图例显示。链接 `curvefitter_widgets` 使用这两个原生界面适配器。
+- 报告保留原版统计项；窗口外观与数字文本格式使用 Qt。C++ 数组采用值语义，越界和宿主接口不采用 Java 对象/异常体系。
+
+数值细节也遵循上游：多项式仅解析求解偏移/斜率，其余系数参与单纯形搜索；回归 SSE 保留原版浮点误差下限；ERF 使用原版 `IJMath.erf` 近似而非系统 `erf`。`EXP_REGRESSION` / `POWER_REGRESSION` 在对数空间拟合，`RODBARD2` 交换 x/y 后拟合，因此三者的 SSE/R²/拟合优度属于变换后的空间，残差仍针对原始数据。
+
+## 原版对照与测试
+
+基准固定于 ImageJ 提交 [`888e13d30cf0fa7c13f601fe929fdb3f940cafea`](https://github.com/imagej/ImageJ/tree/888e13d30cf0fa7c13f601fe929fdb3f940cafea)。来源为其中的 `ij/measure/CurveFitter.java`、`ij/measure/Minimizer.java` 和 `ij/util/IJMath.java`，上游公有领域声明见 [imagej-license.txt](imagej-license.txt)。实现保留并核对了原注释中的算法理由及边界契约。
+
+`tests/java_reference.jsonl` 包含由未修改 Java 源码生成的 86 组结果：全部 25 种模型各有默认初值、显式初值、加权三组案例，另有退化直线、负 y 指数、含原点的幂回归、NaN 清洗，以及覆盖全部六个状态的独立 Minimizer 案例。QTest 比较状态、参数、SSE、残差和统计值；六个单线程优化器案例额外精确比较迭代数与完成次数。双精度数值采用绝对/相对容差 `1e-5`，不把跨语言浮点末位视为算法偏差。
+
+另外使用 QTest 验证并行搜索、参数分辨率、额外数组元素、自定义回调与公式、绘图采样、设置回调，以及实际 Qt 弹窗取消和曲线/散点渲染。CTest 统一运行核心与 Widgets 测试程序。
+
+使用 JDK 21 可从固定提交重建并核验基准：
+
+```sh
+python3 tests/generate_reference.py --check
+# 或复用固定提交的现有 ImageJ checkout：
+python3 tests/generate_reference.py --source /path/to/ImageJ --check
+```
+
+脚本核对提交与三个原始文件的 SHA-256，在临时目录编译，`--check` 不写基准文件。单纯更新预期值不能代替调查算法差异。

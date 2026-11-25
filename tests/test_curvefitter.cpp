@@ -1,163 +1,217 @@
 #include "curvefitter.h"
+
 #include <cmath>
-#include <iostream>
-#include <stdexcept>
-static int checks = 0;
+#include <thread>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QTest>
 
-void check(bool ok, const char* message)
+/**
+ * @brief 对照未修改的 ImageJ Java 实现，验证 Qt 移植的模型和优化器行为。
+ */
+class CurveFitterTest : public QObject
 {
-    ++checks;
-    if (!ok)
-        throw std::runtime_error(message);
+    Q_OBJECT
+
+private slots:
+    void javaReference_data();
+    void javaReference();
+    void customFunction();
+    void formula();
+    void parallelSearch();
+    void resolutionAndExtraElements();
+    void plot();
+    void settings();
+};
+
+namespace {
+
+QVector<double> numbers(const QJsonValue &value)
+{
+    QVector<double> result;
+    foreach (const QJsonValue &item, value.toArray())
+        result << (item.isNull() ? std::numeric_limits<double>::quiet_NaN() : item.toDouble());
+
+    return result;
 }
 
-void near(double a, double b, double tol = 1e-6)
+void compareNumber(double actual, double expected, double tolerance = 1e-5)
 {
-    check(std::isfinite(a) && std::abs(a - b) < tol, "Numerical mismatch");
+    if (std::isnan(expected))
+        QVERIFY(std::isnan(actual));
+    else
+        QVERIFY2(std::abs(actual - expected) <= tolerance * (1 + std::abs(expected)),
+                 qPrintable(QString("actual=%1 expected=%2")
+                                .arg(actual, 0, 'g', 17)
+                                .arg(expected, 0, 'g', 17)));
 }
 
-int main()
-{
-    try
-    {
-        for (int type = 0; type < 25; ++type)
-        {
-            QVector<double> p;
-            switch (type)
-            {
-            case 0:
-                p = { 2, 3 };
-                break;
-            case 1:
-                p = { 2, 3, .2 };
-                break;
-            case 2:
-                p = { 2, 3, .2, -.1 };
-                break;
-            case 3:
-                p = { 2, 3, .2, -.1, .05 };
-                break;
-            case 4:
-            case 15:
-                p = { 2, .3 };
-                break;
-            case 5:
-            case 16:
-                p = { 2, 1.3 };
-                break;
-            case 6:
-                p = { 2, 3 };
-                break;
-            case 7:
-                p = { 8, 2, 3, 1 };
-                break;
-            case 8:
-                p = { .1, 2, 2, 1 };
-                break;
-            case 9:
-                p = { 2, 3, -1 };
-                break;
-            case 10:
-            case 14:
-                p = { 0, 2, 3, 8 };
-                break;
-            case 11:
-            case 13:
-                p = { 2, .7, 1 };
-                break;
-            case 12:
-                p = { 1, 4, 2, .7 };
-                break;
-            case 21:
-                p = { 3, 2, .7 };
-                break;
-            case 22:
-                p = { 3, .7 };
-                break;
-            case 23:
-                p = { 3, .7, 1.5 };
-                break;
-            case 24:
-                p = { 2, 3, 2, .8 };
-                break;
-            default:
-                p.fill(.01, CurveFitter::getNumParams(type));
-                p[0] = 2;
-                p[1] = 1;
-            }
-            QVector<double> x, y;
-            for (int i = 0; i < 60; ++i)
-            {
-                double xx = .2 + 4. * i / 59;
-                x << xx;
-                y << CurveFitter::f(type, p, xx);
-            }
-            CurveFitter cf(x, y);
-            cf.doFit(type);
-            if (cf.getStatus() != CurveFitter::SUCCESS || cf.getSumResidualsSqr() > 1e-5)
-            {
-                std::cerr << "Default fit failed type " << type << " "
-                          << cf.getStatusString().toStdString() << " SSE "
-                          << cf.getSumResidualsSqr() << '\n';
-                return 1;
-            }
-            ++checks;
-            cf.setInitialParameters(p);
-            cf.doFit(type);
-            check(cf.getStatus() == 0, "Seeded fit failed");
-            for (int i = 0; i < x.size(); ++i)
-                near(cf.f(cf.getParams(), x[i]), y[i], 1e-4);
-        }
-        CurveFitter line({ 0, 1, 2 }, { 1, 3, 100 });
-        line.setWeights({ 1, 1, 0 });
-        line.doFit(0);
-        near(line.getParams()[0], 1);
-        near(line.getParams()[1], 2);
-        CurveFitter clean({ 0, NAN, 1 }, { 1, 99, 3 });
-        clean.setWeights({ 1, 0, 1 });
-        clean.doFit(0);
-        near(clean.getParams()[1], 2);
-        CurveFitter custom({ 0, 1, 2, 3 }, { 1, 4, 9, 16 });
-        custom.doCustomFit([](const QVector<double>& p, double x)
-            { return p[0] + p[1] * x + p[2] * x * x; }, 3, "a+b*x+c*x*x", { .5, 1, 1 });
-        check(custom.getStatus() == 0, "Custom fit failed");
-        near(custom.getParams()[1], 2, 1e-4);
-        CurveFitter invalid({ 0, 0 }, { 1, 2 });
-        invalid.doFit(0);
-        check(invalid.getStatus() == 1, "Singular input accepted");
-        CurveFitter negative({ 1, 2, 3 }, { -2, -4, -8 });
-        negative.doFit(15);
-        near(negative.getParams()[0], -1);
-        near(negative.getParams()[1], std::log(2.));
-        CurveFitter origin({ 0, 1, 2, 3 }, { 0, 2, 8, 18 });
-        origin.doFit(16);
-        near(origin.getParams()[1], 2);
-        CurveFitter domain({ -1, 1, 2 }, { 2, 3, 4 });
-        domain.doFit(6);
-        check(domain.getStatus() == 1, "Log domain accepted");
-        line.setMaxIterations(1);
-        line.doCustomFit([](const QVector<double>& p, double x)
-            { return p[0] * std::exp(p[1] * x); }, 2, "a*exp(b*x)", { 1, .1 });
-        check(line.getStatus() == 2, "Iteration limit ignored");
-        check(CurveFitter::fitList().size() == 25, "Missing model metadata");
+} // namespace
 
-        // Independent reference from SciPy least_squares (not the built-in evaluator).
-        CurveFitter noisy({ 0.0, 0.3, 0.6, 0.8999999999999999, 1.2, 1.5, 1.7999999999999998, 2.1,
-                              2.4, 2.6999999999999997 },
-            { 2.1, 2.1349937031587514, 2.5924983006428093, 2.89665882912068, 3.162148804385787,
-                3.7242376007810183, 4.068866421287775, 4.722733953562184, 5.123392946846236,
-                5.909359102131046 });
-        noisy.doFit(CurveFitter::EXPONENTIAL);
-        near(noisy.getParams()[0], 2.0108545150872716, 1e-5);
-        near(noisy.getParams()[1], 0.3973396954541083, 1e-5);
-        near(CurveFitter::f(CurveFitter::GAUSSIAN, { 1, 5, 2, 3 }, 2), 5);
-        near(CurveFitter::f(CurveFitter::RODBARD, { 8, 2, 3, 2 }, 3), 5);
-        near(CurveFitter::f(CurveFitter::GAMMA_VARIATE, { 1, 2, 2, 3 }, 0), 0);
-        std::cout << checks << " checks passed\n";
-    }
-    catch (const std::exception& e)
+void CurveFitterTest::javaReference_data()
+{
+    QTest::addColumn<QByteArray>("record");
+    QFile file(QStringLiteral(REFERENCE_PATH));
+    QVERIFY2(file.open(QIODevice::ReadOnly), qPrintable(file.errorString()));
+    while (!file.atEnd())
     {
-        std::cerr << e.what() << '\n';
-        return 1;
+        const QByteArray line = file.readLine().trimmed();
+        const auto object = QJsonDocument::fromJson(line).object();
+        QTest::newRow(qPrintable(object["name"].toString())) << line;
     }
 }
+
+void CurveFitterTest::javaReference()
+{
+    QFETCH(QByteArray, record);
+    const auto reference = QJsonDocument::fromJson(record).object();
+    QVector<double> actual;
+    if (reference.contains("minimizer"))
+    {
+        const int mode = reference["minimizer"].toInt();
+        Minimizer minimizer;
+        minimizer.setMaximumThreads(1);
+        minimizer.setRandomSeed(31);
+        int calls{};
+        minimizer.setFunction(
+            [&](QVector<double> &p, double) {
+                if (mode == 4 && ++calls > 100)
+                    return std::numeric_limits<double>::quiet_NaN();
+                if (mode == 1)
+                    return std::numeric_limits<double>::quiet_NaN();
+                if (mode == 2)
+                {
+                    minimizer.abort();
+                    return p[0] * p[0];
+                }
+
+                return (p[0] - 2) * (p[0] - 2) + (p[1] + 3) * (p[1] + 3)
+                       + (mode == 5 ? minimizer.getCompletedMinimizations() : 0);
+            },
+            2);
+        if (mode == 3)
+            minimizer.setMaxIterations(1);
+        if (mode == 5)
+            minimizer.setMaxRestarts(1);
+        minimizer.setMaxError(1e-10, 1e-12);
+        QCOMPARE(mode == 4 ? minimizer.minimizeOnce({0, 0}, {1, 1})
+                           : minimizer.minimize({0, 0}, {1, 1}),
+                 reference["status"].toInt());
+        QCOMPARE(minimizer.getIterations(), reference["iterations"].toInt());
+        QCOMPARE(minimizer.getCompletedMinimizations(), reference["completed"].toInt());
+        actual = minimizer.getParams();
+    }
+    else
+    {
+        CurveFitter fitter(numbers(reference["x"]), numbers(reference["y"]));
+        fitter.getMinimizer().setMaximumThreads(1);
+        fitter.getMinimizer().setRandomSeed(0);
+        if (!reference["initial"].isNull())
+            fitter.setInitialParameters(numbers(reference["initial"]));
+        if (!reference["weights"].isNull())
+            fitter.setWeights(numbers(reference["weights"]));
+        fitter.doFit(reference["type"].toInt());
+        QCOMPARE(fitter.getStatus(), reference["status"].toInt());
+        actual = fitter.getParams();
+        compareNumber(fitter.getSumResidualsSqr(), reference["sse"].toDouble());
+        compareNumber(fitter.getRSquared(), reference["r2"].toDouble());
+        compareNumber(fitter.getSD(), reference["sd"].toDouble());
+        compareNumber(fitter.getFitGoodness(), reference["goodness"].toDouble());
+        const auto expected = numbers(reference["residuals"]);
+        const auto residuals = fitter.getResiduals();
+        QCOMPARE(residuals.size(), expected.size());
+        for (int i = 0; i < expected.size(); ++i)
+            compareNumber(residuals[i], expected[i]);
+    }
+    const auto expected = numbers(reference["params"]);
+    QCOMPARE(actual.size(), expected.size());
+    for (int i = 0; i < expected.size(); ++i)
+        compareNumber(actual[i], expected[i]);
+}
+
+void CurveFitterTest::customFunction()
+{
+    CurveFitter fitter({0, 1, 2, 3, 4}, {1, 4, 9, 16, 25});
+    fitter.setOffsetMultiplySlopeParams(0, -1, 1);
+    fitter.doCustomFit([](const QVector<double> &p,
+                          double x) { return p[0] + p[1] * x + p[2] * x * x; },
+                       3, "a+b*x+c*x*x", {0, 0, 1});
+    QCOMPARE(fitter.getStatus(), Minimizer::SUCCESS);
+    compareNumber(fitter.getParams()[0], 1);
+    compareNumber(fitter.getParams()[1], 2);
+    compareNumber(fitter.getParams()[2], 1);
+}
+
+void CurveFitterTest::formula()
+{
+    CurveFitter fitter({0, 1, 2, 3}, {2, 5, 8, 11});
+    QCOMPARE(fitter.doCustomFit("y=a+b*x", {1, 1}), 2);
+    QCOMPARE(fitter.getStatus(), Minimizer::SUCCESS);
+    compareNumber(fitter.f(4), 14, 1e-4);
+    QCOMPARE(fitter.doCustomFit("y = a +", {1}), 0);
+    QCOMPARE(CurveFitter::getNumParams("y=a+Math.exp(b*x)"), 2);
+}
+
+void CurveFitterTest::parallelSearch()
+{
+    Minimizer minimizer;
+    minimizer.setMaximumThreads(2);
+    minimizer.setFunction([](QVector<double> &p,
+                             double) { return std::pow(p[0] - 2, 2) + std::pow(p[1] + 3, 2); },
+                          2);
+    minimizer.setMaxError(1e-10, 1e-12);
+    QCOMPARE(minimizer.minimize({0, 0}, {1, 1}), Minimizer::SUCCESS);
+    QVERIFY(minimizer.getCompletedMinimizations() >= 2);
+    compareNumber(minimizer.getParams()[0], 2);
+    compareNumber(minimizer.getParams()[1], -3);
+}
+
+void CurveFitterTest::resolutionAndExtraElements()
+{
+    Minimizer minimizer;
+    minimizer.setMaximumThreads(1);
+    minimizer.setExtraArrayElements(2);
+    minimizer.setParamResolutions({1e-5});
+    minimizer.setFunction(
+        [](QVector<double> &p, double) {
+            p[2] = 42;
+            p[3] = 81;
+            return (p[0] - 2) * (p[0] - 2);
+        },
+        1);
+    QCOMPARE(minimizer.minimize({0}, {1}), Minimizer::SUCCESS);
+    QCOMPARE(minimizer.getParams().size(), 4);
+    QCOMPARE(minimizer.getParams()[2], 42.0);
+    QCOMPARE(minimizer.getParams()[3], 81.0);
+    compareNumber(minimizer.getFunctionValue(), 0);
+}
+
+void CurveFitterTest::plot()
+{
+    CurveFitter fitter({0, 1, 2}, {2, 5, 8});
+    fitter.doFit(CurveFitter::STRAIGHT_LINE);
+    const auto data = fitter.getPlot(256);
+    QCOMPARE(data.curve.size(), 256);
+    QCOMPARE(data.curve.first(), QPointF(0, 2));
+    QCOMPARE(data.curve.last(), QPointF(255, 767));
+    QCOMPARE(data.data.size(), 3);
+    QVERIFY(fitter.getResultString().contains("Number of iterations: 1"));
+}
+
+void CurveFitterTest::settings()
+{
+    CurveFitter fitter({1, 2, 3}, {2, 4, 8});
+    bool called{};
+    fitter.setSettingsCallback([&](QVector<double> &, QVector<double> &, int &, int &, double &) {
+        called = true;
+        return false;
+    });
+    fitter.doFit(CurveFitter::EXPONENTIAL, true);
+    QVERIFY(called);
+    QCOMPARE(fitter.getStatus(), Minimizer::SUCCESS);
+}
+
+QTEST_GUILESS_MAIN(CurveFitterTest)
+#include "test_curvefitter.moc"
