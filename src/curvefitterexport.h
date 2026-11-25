@@ -1,0 +1,11 @@
+#pragma once
+
+#include <QtGlobal>
+
+#if !defined(CURVEFITTER_SHARED)
+#define CURVEFITTER_EXPORT
+#elif defined(CURVEFITTER_BUILDING_LIBRARY)
+#define CURVEFITTER_EXPORT Q_DECL_EXPORT
+#else
+#define CURVEFITTER_EXPORT Q_DECL_IMPORT
+#endif

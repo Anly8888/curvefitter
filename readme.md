@@ -28,7 +28,9 @@ ctest --test-dir build/Qt_5_15_15-Debug --output-on-failure
 
 默认构建静态库。配置时传入 `-DCURVEFITTER_BUILD_SHARED=ON` 可构建动态库。
 两种配置使用同一个 CMake 目标 `curvefitter`；链接该目标即可获得所需的公开头文件路径。
-动态库显式导出 `CurveFitter` 和 `Minimizer` 的公开非内联函数。
+动态库使用 Qt 的 `Q_DECL_EXPORT` 导出公开非内联函数，调用方通过
+`Q_DECL_IMPORT` 导入；静态库不加导出或导入修饰。链接 `curvefitter`
+目标时无需手动定义这些宏。
 在 Windows 上运行动态库版本时，需让系统能找到对应的 DLL。
 
 ### 可选：示例程序

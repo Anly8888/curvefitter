@@ -19,16 +19,15 @@ endif()
 
 add_library(curvefitter ${curvefitter_library_type} src/curvefitter.cpp src/minimizer.cpp)
 if(CURVEFITTER_BUILD_SHARED)
+    target_compile_definitions(curvefitter
+        PUBLIC CURVEFITTER_SHARED
+        PRIVATE CURVEFITTER_BUILDING_LIBRARY)
     set_target_properties(curvefitter PROPERTIES
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN YES)
 endif()
 
-include(GenerateExportHeader)
-generate_export_header(curvefitter EXPORT_FILE_NAME curvefitterexport.h)
-target_include_directories(curvefitter PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(curvefitter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(curvefitter PUBLIC Threads::Threads Qt${QT_VERSION_MAJOR}::Core)
 
 if(CURVEFITTER_ENABLE_STRING_FORMULAS)
