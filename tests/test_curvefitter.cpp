@@ -22,8 +22,7 @@ private slots:
     void formula();
     void parallelSearch();
     void resolutionAndExtraElements();
-    void plot();
-    void settings();
+    void resultReport();
 };
 
 namespace {
@@ -188,29 +187,13 @@ void CurveFitterTest::resolutionAndExtraElements()
     compareNumber(minimizer.getFunctionValue(), 0);
 }
 
-void CurveFitterTest::plot()
+void CurveFitterTest::resultReport()
 {
     CurveFitter fitter({0, 1, 2}, {2, 5, 8});
     fitter.doFit(CurveFitter::STRAIGHT_LINE);
-    const auto data = fitter.getPlot(256);
-    QCOMPARE(data.curve.size(), 256);
-    QCOMPARE(data.curve.first(), QPointF(0, 2));
-    QCOMPARE(data.curve.last(), QPointF(255, 767));
-    QCOMPARE(data.data.size(), 3);
-    QVERIFY(fitter.getResultString().contains("Number of iterations: 1"));
-}
 
-void CurveFitterTest::settings()
-{
-    CurveFitter fitter({1, 2, 3}, {2, 4, 8});
-    bool called{};
-    fitter.setSettingsCallback([&](QVector<double> &, QVector<double> &, int &, int &, double &) {
-        called = true;
-        return false;
-    });
-    fitter.doFit(CurveFitter::EXPONENTIAL, true);
-    QVERIFY(called);
-    QCOMPARE(fitter.getStatus(), Minimizer::SUCCESS);
+    QCOMPARE(fitter.f(255), 767.0);
+    QVERIFY(fitter.getResultString().contains("Number of iterations: 1"));
 }
 
 QTEST_GUILESS_MAIN(CurveFitterTest)

@@ -64,48 +64,11 @@ void Minimizer::setMaxError(double relative, double absolute)
     maxAbsError = absolute;
 }
 
-void Minimizer::setStatusAndEsc(const QString &prefix, bool escape)
-{
-    ijStatusString = prefix;
-    checkEscape = escape;
-}
-
-void Minimizer::setStatusCallbacks(StatusCallback display, EscapeCallback escape)
-{
-    statusCallback = std::move(display);
-    escapeCallback = std::move(escape);
-}
-
-void Minimizer::reportProgress()
-{
-    if (ijStatusString.isNull() && !checkEscape)
-        return;
-    std::lock_guard<std::mutex> lock(progressMutex);
-    const int iterations = totalNumIter;
-    if (iterations <= nextIterationForStatus)
-        return;
-    const auto elapsed = timer.elapsed();
-    nextIterationForStatus = iterations + static_cast<int>(iterations * 500LL / (elapsed + 1));
-    if (elapsed <= 1000)
-        return;
-    if (checkEscape && escapeCallback && escapeCallback())
-    {
-        status = ABORTED;
-        if (statusCallback)
-            statusCallback(ijStatusString + tr(" ABORTED"));
-        return;
-    }
-    if (!ijStatusString.isNull() && statusCallback)
-        statusCallback(ijStatusString + QString::number(iterations) + tr(" (%1 max)").arg(maxIter)
-                       + (checkEscape ? tr(" ESC to stop") : QString()));
-}
-
 int Minimizer::minimize(const Array &initialParams, const Array &variations)
 {
     status = SUCCESS;
     resultsVector.clear();
     collectResults = true;
-    timer.start();
     int loops = maxRestarts + 1;
     if (useSingleThread)
         loops *= 2;
@@ -161,15 +124,12 @@ int Minimizer::minimize(const Array &initialParams, const Array &variations)
         if (resultsVector.size() >= 2)
             return SUCCESS;
     }
-    if (!ijStatusString.isNull() && statusCallback)
-        statusCallback(QString());
     return maxRestarts > 0 ? MAX_RESTARTS_EXCEEDED : status.load();
 }
 
 int Minimizer::minimizeOnce(const Array &initialParams, const Array &variations)
 {
     status = SUCCESS;
-    timer.start();
     minimizeOnce(initialParams, variations, randomSeed);
     return status;
 }
@@ -321,7 +281,6 @@ int Minimizer::minimizeSimplex(Matrix &simp)
             status = MAX_ITERATIONS_EXCEEDED;
         if (status != SUCCESS)
             break;
-        reportProgress();
     }
 
     return best;

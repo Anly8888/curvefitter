@@ -4,7 +4,7 @@
 
 ## 构建与测试
 
-需要 C++17、CMake ≥ 3.16、Qt 5/6 Core、Qml；单元测试使用 Qt Test。原生界面适配另外使用 Qt Widgets，默认构建，可通过 `-DCURVEFITTER_BUILD_WIDGETS=OFF` 关闭。
+需要 C++17、CMake ≥ 3.16、Qt 5/6 Core、Qml；单元测试使用 Qt Test。不依赖 Qt Widgets。
 
 Debian/Ubuntu 开发依赖为 `cmake qtbase5-dev qtdeclarative5-dev`。Java 仅用于重新生成对照数据，库及常规测试不需要 Java 或联网。
 
@@ -59,13 +59,14 @@ CMake 集成：`add_subdirectory(curvefitter)` 后链接 `curvefitter`。支持�
 
 目标函数在定义域外应返回 NaN；这是原版优化器的算法输入，不能替换成大罚值。多线程目标函数须线程安全。原版双线程共享控制状态在 C++ 中使用原子变量和互斥锁，避免数据竞争；并行调度及不同平台数学库仍可能带来末位差异，不能保证跨语言逐位相同或任意问题全局收敛。
 
-## ImageJ 宿主功能的 Qt 适配
+## 数值库的移植范围
 
-- `doCustomFit("y=a+b*Math.exp(c*x)", initial)` 使用 Qt `QJSEngine` 执行数值公式，支持常用裸数学函数名及 `Math.erf`。参数按原版 `a...f` 识别，公式拟合强制单线程。这里适配的是数值公式；ImageJ 图像处理、窗口、插件等宿主宏命令不属于 Qt 环境，不提供整个 ImageJ 宏运行时。
-- `CurveFitterWidgets::install(fitter, statusLabel, parent)` 安装 Qt 设置对话框、状态标签和 ESC 中止。然后可调用 `doFit(type, true)`。取消设置后继续使用原参数拟合，与原版相同。安装适配器及设置弹窗必须在 GUI 线程进行，耗时拟合应在工作线程执行。
-- 无界面应用可用 `setSettingsCallback()` 和 `Minimizer::setStatusCallbacks()` 接入自己的设置/状态系统；未提供设置接口时请求弹窗会显式报错。
-- `getPlot()` 返回与原版相同采样规则的 `PlotData`（含 256 灰阶特例），`CurvePlotWidget` 提供 Qt 曲线、散点和参数图例显示。链接 `curvefitter_widgets` 使用这两个原生界面适配器。
-- 报告保留原版统计项；窗口外观与数字文本格式使用 Qt。C++ 数组采用值语义，越界和宿主接口不采用 Java 对象/异常体系。
+- 不移植设置弹窗、进度显示、键盘中止或绘图界面。初值和算法配置由调用方通过数值 API 设置，
+  取消拟合使用 `Minimizer::abort()`。调用方可用 `f(x)` 采样并自行绘图。
+- `doCustomFit("y=a+b*Math.exp(c*x)", initial)` 使用 Qt `QJSEngine` 执行数值公式。
+  支持常用数学函数，参数按原版 `a...f` 识别；公式拟合强制单线程。
+  不提供 ImageJ 图像处理、窗口、插件命令或完整宏运行时。
+- 报告保留原版统计项；数字文本格式使用 Qt。C++ 数组采用值语义。
 
 数值细节也遵循上游：多项式仅解析求解偏移/斜率，其余系数参与单纯形搜索；回归 SSE 保留原版浮点误差下限；ERF 使用原版 `IJMath.erf` 近似而非系统 `erf`。`EXP_REGRESSION` / `POWER_REGRESSION` 在对数空间拟合，`RODBARD2` 交换 x/y 后拟合，因此三者的 SSE/R²/拟合优度属于变换后的空间，残差仍针对原始数据。
 
@@ -75,7 +76,7 @@ CMake 集成：`add_subdirectory(curvefitter)` 后链接 `curvefitter`。支持�
 
 `tests/java_reference.jsonl` 包含由未修改 Java 源码生成的 86 组结果：全部 25 种模型各有默认初值、显式初值、加权三组案例，另有退化直线、负 y 指数、含原点的幂回归、NaN 清洗，以及覆盖全部六个状态的独立 Minimizer 案例。QTest 比较状态、参数、SSE、残差和统计值；六个单线程优化器案例额外精确比较迭代数与完成次数。双精度数值采用绝对/相对容差 `1e-5`，不把跨语言浮点末位视为算法偏差。
 
-另外使用 QTest 验证并行搜索、参数分辨率、额外数组元素、自定义回调与公式、绘图采样、设置回调，以及实际 Qt 弹窗取消和曲线/散点渲染。CTest 统一运行核心与 Widgets 测试程序。
+另外使用 QTest 验证并行搜索、参数分辨率、额外数组元素、自定义回调与公式和结果报告。
 
 使用 JDK 21 可从固定提交重建并核验基准：
 

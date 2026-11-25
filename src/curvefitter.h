@@ -3,7 +3,6 @@
 #include "minimizer.h"
 
 #include <functional>
-#include <QPointF>
 #include <QStringList>
 
 /**
@@ -58,29 +57,15 @@ public:
         MAX_ITERATIONS = MAX_ITERATIONS_EXCEEDED,
     };
 
-    /**
-     * @brief 原版 Plot 的数据模型，供 Qt 绘图视图消费。
-     */
-    struct PlotData
-    {
-        QString title, xLabel, yLabel, legend;
-        QVector<QPointF> curve, data;
-        double xMin{}, xMax{}, yMin{}, yMax{};
-        int width{600}, height{350};
-    };
-
-    using SettingsCallback = std::function<bool(Array &, Array &, int &, int &, double &)>;
-
     CurveFitter(const Array &x, const Array &y);
 
-    void doFit(int type, bool showSettings = false);
+    void doFit(int type);
     void doCustomFit(UserFunction function,
                      int count,
                      const QString &formula,
                      const Array &initial = {},
-                     const Array &variations = {},
-                     bool showSettings = false);
-    int doCustomFit(const QString &equation, const Array &initial = {}, bool showSettings = false);
+                     const Array &variations = {});
+    int doCustomFit(const QString &equation, const Array &initial = {});
     void setInitialParameters(const Array &p) { initialParams = p; }
 
     void setInitialParamVariations(const Array &p) { initialParamVariations = p; }
@@ -88,8 +73,6 @@ public:
     void setWeights(const Array &w) { weights = w; }
 
     Minimizer &getMinimizer() { return minimizer; }
-
-    void setSettingsCallback(SettingsCallback callback) { settingsCallback = std::move(callback); }
 
     void setOffsetMultiplySlopeParams(int offset, int multiply, int slope);
     Array getParams();
@@ -107,11 +90,6 @@ public:
     int getRestarts() const { return minimizer.getMaxRestarts(); }
 
     void setMaxError(double error);
-    void setStatusAndEsc(const QString &prefix, bool escape)
-    {
-        minimizer.setStatusAndEsc(prefix, escape);
-    }
-
     int getIterations() const { return linearRegressionUsed ? 1 : minimizer.getIterations(); }
 
     int getMaxIterations() const { return minimizer.getMaxIterations(); }
@@ -131,7 +109,6 @@ public:
     double f(double x);
     double f(const Array &p, double x);
     double userFunction(Array &p, double dummy);
-    PlotData getPlot(int points = 100);
     static double f(int type, const Array &p, double x);
     static int getNumParams(int type);
     static int getNumParams(const QString &equation);
@@ -155,7 +132,6 @@ private:
     bool isModifiedFitType(int type);
     bool prepareModifiedFitType(int type);
     void postProcessModifiedFitType(int type);
-    void settingsDialog();
     static double sqr(double x) { return x * x; }
 
 private:
@@ -174,5 +150,4 @@ private:
     bool macroDefined{}, hasSlopeParam{}, linearRegressionUsed{}, restrictPower{};
     Minimizer minimizer;
     int minimizerStatus{Minimizer::INITIALIZATION_FAILURE};
-    SettingsCallback settingsCallback; // Qt 宿主设置接口；数值流程不依赖窗口实现。
 };

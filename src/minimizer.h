@@ -5,7 +5,6 @@
 #include <functional>
 #include <mutex>
 #include <QCoreApplication>
-#include <QElapsedTimer>
 #include <QThread>
 #include <QVector>
 
@@ -24,14 +23,12 @@ public:
     using Array = QVector<double>;
     using Matrix = QVector<Array>;
     using UserFunction = std::function<double(Array &, double)>;
-    using StatusCallback = std::function<void(const QString &)>;
-    using EscapeCallback = std::function<bool()>;
 
     enum Status
     {
         SUCCESS,                  // 成功收敛。
         INITIALIZATION_FAILURE,   // 无法找到有效初始单纯形。
-        ABORTED,                  // 调用方或 ESC 请求中止。
+        ABORTED,                  // 调用方请求中止。
         REINITIALIZATION_FAILURE, // 无法重新构造有效单纯形，结果可能不准确。
         MAX_ITERATIONS_EXCEEDED,  // 达到搜索迭代预算。
         MAX_RESTARTS_EXCEEDED,    // 重启预算用完，未找到两个一致的最优值。
@@ -67,8 +64,6 @@ public:
 
     void abort() { status = ABORTED; }
 
-    void setStatusAndEsc(const QString &prefix, bool escape);
-    void setStatusCallbacks(StatusCallback display, EscapeCallback escape = {});
     void setExtraArrayElements(int count) { numExtraArrayElements = count; }
 
     static QStringList statusStrings();
@@ -90,7 +85,6 @@ private:
     };
 
     void minimizeOnce(const Array &initialParams, const Array &variations, int seed);
-    void reportProgress();
     static void copyVertex(const Array &source, Array &target) { target = source; }
 
     int minimizeSimplex(Matrix &simp);
@@ -133,11 +127,5 @@ private:
     Array result;         // 最优参数、目标值及用户保留的额外元素。
     Matrix resultsVector; // 多次搜索的结果，主线程在 join 后筛选。
     bool collectResults{};
-    QString ijStatusString;
-    bool checkEscape{};
-    int nextIterationForStatus{10};
-    QElapsedTimer timer;
-    StatusCallback statusCallback;
-    EscapeCallback escapeCallback;
-    std::mutex resultsMutex, progressMutex; // 分别保护结果提交和宿主状态回调。
+    std::mutex resultsMutex; // 保护并行搜索提交的结果。
 };

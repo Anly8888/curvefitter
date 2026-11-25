@@ -35,10 +35,9 @@ int CurveFitter::getNumParams(const QString &equation)
  * @brief 使用 Qt JavaScript 引擎执行数值公式，替代 ImageJ 宏解释器的宿主接口。
  * @param equation y=... 形式的数值公式；支持 Math 函数和常用裸函数名。
  * @param initial 初始参数，省略时遵循原版默认值。
- * @param showSettings 是否调用宿主安装的设置界面。
  * @return 成功解析时返回参数个数，语法错误返回 0。
  */
-int CurveFitter::doCustomFit(const QString &equation, const Array &initial, bool showSettings)
+int CurveFitter::doCustomFit(const QString &equation, const Array &initial)
 {
     customFormula = QString();
     customParamCount = getNumParams(equation);
@@ -75,7 +74,7 @@ int CurveFitter::doCustomFit(const QString &equation, const Array &initial, bool
     };
     macroDefined = true;
     initialParams = initial;
-    doFit(CUSTOM, showSettings);
+    doFit(CUSTOM);
 
     return customParamCount;
 }

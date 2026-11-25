@@ -193,43 +193,17 @@ void CurveFitter::doCustomFit(UserFunction function,
                               int count,
                               const QString &formula,
                               const Array &initial,
-                              const Array &variations,
-                              bool showSettings)
+                              const Array &variations)
 {
     customFunction = std::move(function);
     customParamCount = count;
     initialParams = initial;
     initialParamVariations = variations;
     customFormula = formula.isNull() ? tr("(defined in plugin)") : formula;
-    doFit(CUSTOM, showSettings);
+    doFit(CUSTOM);
 }
 
-void CurveFitter::settingsDialog()
-{
-    if (!settingsCallback)
-        throw std::logic_error("Install a Qt settings callback before showSettings=true");
-    if (initialParamVariations.isEmpty())
-        initialParamVariations = Array(numParams);
-    int iterations = minimizer.getMaxIterations(), restarts = minimizer.getMaxRestarts();
-    double error = maxRelError;
-    const Array previous = initialParams;
-    if (!settingsCallback(initialParams, initialParamVariations, iterations, restarts, error))
-    {
-        initialParams = previous;
-        return;
-    }
-    for (int i = 0; i < numParams; ++i)
-        if (!std::isnan(initialParams[i]))
-            initialParamVariations[i] = jmax(.01 * initialParams[i],
-                                             .001 * initialParamVariations[i]);
-    if (iterations > 0)
-        minimizer.setMaxIterations(iterations);
-    if (restarts >= 0)
-        minimizer.setMaxRestarts(restarts);
-    setMaxError(error);
-}
-
-void CurveFitter::doFit(int fitType, bool showSettings)
+void CurveFitter::doFit(int fitType)
 {
     if (!(fitType >= STRAIGHT_LINE && fitType < fitList().size() || fitType == CUSTOM))
         throw std::invalid_argument("Invalid fit type");
@@ -264,8 +238,6 @@ void CurveFitter::doFit(int fitType, bool showSettings)
             minimizer.setMaximumThreads(1); // macro interpreter does not allow multithreading
         if (!makeInitialParamsAndVariations(fitType)) // also includes some data checking
             return;                                   // initialization failure
-        if (showSettings)
-            settingsDialog();
         if (numRegressionParams > 0)
             modifyInitialParamsAndVariations();
         else
@@ -922,8 +894,6 @@ bool CurveFitter::makeInitialParamsAndVariations(int fitType)
         // case POLY2: case POLY3: case POLY4: case POLY5: case POLY6: case POLY7: case POLY8: {
         //  offset&slope calculated via regression; leave the others at 0
 
-        // also for the other cases, some initial parameters are unused; only to show them with
-        // 'showSettings'
         case EXPONENTIAL: // a*exp(bx)   assuming change by factor of e between xMin & xMax
             initialParams[1] = 1.0 / (xMax - xMin + 1e-100) * signum(yMean) * signum(slope);
             initialParams[0] = yMean
@@ -1351,56 +1321,4 @@ QString CurveFitter::getResultString()
         report += QString("\n\t%1 = %2").arg(QChar('a' + i)).arg(p[i], 0, 'g', 10);
 
     return report;
-}
-
-/**
- * @brief 沿用原版 Plot 的采样点数、256 灰阶特例、坐标范围和图例生成规则。
- * @param points 请求的采样点数，256 表示固定 x=0...255。
- * @return 曲线与原始散点的绘图数据，不依赖 ImageJ AWT 窗口。
- */
-CurveFitter::PlotData CurveFitter::getPlot(int points)
-{
-    PlotData plot;
-    plot.title = getFormula();
-    plot.xLabel = "X";
-    plot.yLabel = "Y";
-    for (int i = 0; i < xData.size(); ++i)
-        plot.data.append(QPointF(xData.constData()[i], yData.constData()[i]));
-    if (getStatus() == Minimizer::INITIALIZATION_FAILURE || xData.isEmpty())
-    {
-        plot.legend = getName() + '\n' + getStatusString();
-        return plot;
-    }
-
-    const int count = points == 256 ? 256 : jmin(1000, jmax(points, xData.size()));
-    plot.xMin = points == 256 ? 0 : *std::min_element(xData.cbegin(), xData.cend());
-    plot.xMax = points == 256 ? 255 : *std::max_element(xData.cbegin(), xData.cend());
-    double low = *std::min_element(yData.cbegin(), yData.cend());
-    double high = *std::max_element(yData.cbegin(), yData.cend());
-    double curveLow = std::numeric_limits<double>::infinity(), curveHigh = -curveLow;
-    double sampleX = plot.xMin;
-    const double step = (plot.xMax - plot.xMin) / (count - 1);
-    const Array params = getParams();
-    for (int i = 0; i < count; ++i)
-    {
-        // 原版先将采样横坐标和纵坐标存为 float，再求显示范围。
-        const float x = static_cast<float>(sampleX);
-        sampleX += step;
-        const float y = static_cast<float>(f(params, x));
-        plot.curve.append(QPointF(x, y));
-        if (!std::isnan(y))
-        {
-            curveLow = jmin(curveLow, y);
-            curveHigh = jmax(curveHigh, y);
-        }
-    }
-    const double range = high - low;
-    plot.yMin = jmax(low - range, jmin(low, curveLow));
-    plot.yMax = jmin(high + range, jmax(high, curveHigh));
-    plot.legend = getName() + '\n' + getFormula();
-    for (int i = 0; i < numParams; ++i)
-        plot.legend += QString("\n%1 = %2").arg(QChar('a' + i)).arg(params[i], 0, 'g', 10);
-    plot.legend += tr("\nR^2 = %1").arg(getRSquared(), 0, 'g', 5);
-
-    return plot;
 }
