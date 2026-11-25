@@ -9,8 +9,10 @@
 
 namespace
 {
+
 constexpr double quietNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double inf = std::numeric_limits<double>::infinity();
+
 int degree(int t)
 {
     if (t == 0)
@@ -21,7 +23,9 @@ int degree(int t)
         return t - 12;
     return -1;
 }
+
 }
+
 QStringList CurveFitter::fitList()
 {
     return { "Straight Line", "2nd Degree Polynomial", "3rd Degree Polynomial",
@@ -32,6 +36,7 @@ QStringList CurveFitter::fitList()
         "7th Degree Polynomial", "8th Degree Polynomial", "Gaussian (no offset)",
         "Exponential Recovery (no offset)", "Chapman-Richards", "Error Function" };
 }
+
 QStringList CurveFitter::formulas()
 {
     return { "y = a+bx", "y = a+bx+cx^2", "y = a+bx+cx^2+dx^3", "y = a+bx+cx^2+dx^3+ex^4",
@@ -44,11 +49,13 @@ QStringList CurveFitter::formulas()
         "y = a+bx+cx^2+dx^3+ex^4+fx^5+gx^6+hx^7+ix^8", "y = a*exp(-(x-b)*(x-b)/(2*c*c))",
         "y = a*(1-exp(-b*x))", "y = a*(1-exp(-b*x))^c", "y = a+b*erf((x-c)/d)" };
 }
+
 QVector<int> CurveFitter::sortedTypes()
 {
     return { 0, 1, 2, 3, 17, 18, 19, 20, 5, 16, 4, 15, 11, 13, 22, 6, 9, 12, 21, 24, 7, 10, 14, 8,
         23 };
 }
+
 QStringList CurveFitter::getSortedFitList()
 {
     QStringList r;
@@ -56,10 +63,12 @@ QStringList CurveFitter::getSortedFitList()
         r << fitList()[t];
     return r;
 }
+
 int CurveFitter::getFitCode(const QString& s)
 {
     return fitList().indexOf(s);
 }
+
 int CurveFitter::getNumParams(int t)
 {
     if (degree(t) >= 0)
@@ -90,22 +99,34 @@ int CurveFitter::getNumParams(int t)
         throw std::invalid_argument("Invalid fit type");
     }
 }
+
 int CurveFitter::getNumParams() const
 {
     return type_ == CUSTOM ? customCount_ : getNumParams(type_);
 }
+
 QString CurveFitter::getName() const
 {
     return type_ == CUSTOM ? "Custom" : type_ >= 0 ? fitList().value(type_) : QString();
 }
+
 QString CurveFitter::getFormula() const
 {
     return type_ == CUSTOM ? customFormula_ : formulas().value(type_);
 }
+
 double CurveFitter::f(const Parameters& p, double x) const
 {
     return type_ == CUSTOM ? custom_(p, x) : f(type_, p, x);
 }
+
+/**
+ * @brief 计算 ImageJ 内置公式，沿用上游的参数顺序及定义域约定。
+ * @param t 模型编号。
+ * @param p 至少包含该模型所需的参数；允许末尾附带 SSE。
+ * @param x 求值位置。
+ * @return 公式值；不可计算的定义域返回 NaN，RODBARD2 保留上游的零值约定。
+ */
 double CurveFitter::f(int t, const Parameters& p, double x)
 {
     if (p.size() < getNumParams(t))
@@ -160,6 +181,12 @@ double CurveFitter::f(int t, const Parameters& p, double x)
         return quietNaN;
     }
 }
+
+/**
+ * @brief 构造拟合器并移除含 NaN 的点对，保留原始索引用于映射权重。
+ * @param x 自变量数据；长度必须与 y 一致。
+ * @param y 因变量数据。
+ */
 CurveFitter::CurveFitter(const QVector<double>& x, const QVector<double>& y)
     : originalCount_(x.size())
 {
@@ -174,6 +201,7 @@ CurveFitter::CurveFitter(const QVector<double>& x, const QVector<double>& y)
         }
     weights_.fill(1, x_.size());
 }
+
 /**
  * @brief 设置原始输入各点的权重；零权重点不参与拟合。
  * @param w 非负有限权重，长度须等于过滤 NaN 前的输入长度。
@@ -188,24 +216,28 @@ void CurveFitter::setWeights(const QVector<double>& w)
     for (int i = 0; i < kept_.size(); ++i)
         weights_[i] = w[kept_[i]];
 }
+
 void CurveFitter::setMaxIterations(int n)
 {
     if (n < 1)
         throw std::invalid_argument("Iterations must be positive");
     maxIterations_ = n;
 }
+
 void CurveFitter::setRestarts(int n)
 {
     if (n < 0)
         throw std::invalid_argument("Restarts must be nonnegative");
     restarts_ = n;
 }
+
 void CurveFitter::setMaxError(double e)
 {
     if (!std::isfinite(e) || e <= 0)
         throw std::invalid_argument("Tolerance must be positive");
     tolerance_ = e;
 }
+
 /**
  * @brief 使用内置模型拟合；通过状态接口区分成功、无效数据及迭代上限。
  * @param t ImageJ 模型编号。
@@ -216,6 +248,7 @@ void CurveFitter::doFit(int t)
     type_ = t;
     fit();
 }
+
 /**
  * @brief 用 C++ 回调替代 ImageJ UserFunction；初值必须覆盖所有参数。
  * @param fn 模型函数，异常直接传给调用者。
@@ -287,6 +320,7 @@ bool leastSquares(QVector<QVector<double>> a, QVector<double> b, QVector<double>
     }
     return true;
 }
+
 }
 
 void CurveFitter::fit()
@@ -309,10 +343,12 @@ void CurveFitter::fit()
         if (weights_[i] == 0)
             continue;
         double xx = x_[i], yy = y_[i];
+        // 对数回归拟合 ln(|y|)，允许同号负 y；恢复振幅时再补回符号。
         if (type_ == POWER_REGRESSION || type_ == EXP_REGRESSION)
         {
             if (type_ == POWER_REGRESSION)
             {
+                // 幂函数只有正指数才能通过原点；原点不参与对数变换。
                 if (xx == 0 && yy == 0)
                 {
                     restrictPower = true;
@@ -328,6 +364,7 @@ void CurveFitter::fit()
                 return;
             yy = std::log(yy * sign);
         }
+        // NIH Image 兼容模式通过拟合 x(y) 求逆函数，不是直接拟合 y(x)。
         else if (type_ == RODBARD2)
         {
             std::swap(xx, yy);
@@ -425,6 +462,7 @@ void CurveFitter::fit()
         return;
     if (model == RODBARD && xmin < 0 && xmax > 0)
         return;
+    // 沿用上游的线性参数消元：基线和振幅直接回归，减少单纯形搜索维数。
     int offset = -1, factor = -1;
     switch (model)
     {
@@ -519,7 +557,8 @@ void CurveFitter::fit()
     for (double v : variations_)
         if (!std::isfinite(v) || v <= 0)
             throw std::invalid_argument("Variations must be positive");
-    // Internally separate the additive baseline and multiplicative amplitude.
+    // 高斯的公开 b 是峰值，Rodbard 的公开 a 是端点值；内部改用独立振幅，
+    // 使基线和振幅可线性求解，拟合结束后再恢复公开参数。
     if (model == GAUSSIAN)
         p[1] -= p[0];
     if (model == RODBARD)
@@ -564,6 +603,7 @@ void CurveFitter::fit()
             if (offset >= 0)
                 q[offset] = (sy - q[factor] * sg) / sw;
         }
+        // 最小化 sum(w*(f(x)-y)^2)，不是先乘权重再将残差平方。
         double cost = 0;
         for (int i = 0; i < x.size(); ++i)
         {
@@ -604,6 +644,8 @@ void CurveFitter::fit()
                 bestCost = costs[lo];
                 best = vertices[lo];
             }
+            // 精确拟合时 SSE 接近零，单用相对误差无法停止；保留绝对误差下限，
+            // 并要求单纯形尺度同时缩小，避免仅因目标函数平坦而提前成功。
             double spread = 0;
             for (int j : free)
                 spread = std::max(spread,
@@ -702,6 +744,10 @@ void CurveFitter::fit()
     message_ = converged ? "Success" : "Maximum iterations reached";
 }
 
+/**
+ * @brief 返回原始数据与拟合曲线之差，不对残差乘权重。
+ * @return 每个保留点的 y-f(x)；与对数回归和 RODBARD2 的目标空间 SSE 不同。
+ */
 QVector<double> CurveFitter::getResiduals() const
 {
     QVector<double> r;
@@ -709,10 +755,20 @@ QVector<double> CurveFitter::getResiduals() const
         r << y_[i] - f(params_, x_[i]);
     return r;
 }
+
+/**
+ * @brief 按实际拟合空间计算加权决定系数 1-SSE/SSD。
+ * @return 越接近 1 拟合越好；常量数据返回 0，拟合失败返回 NaN。
+ */
 double CurveFitter::getRSquared() const
 {
     return std::isnan(sse_) ? quietNaN : variance_ > 0 ? 1 - sse_ / variance_ : 0;
 }
+
+/**
+ * @brief 按 ImageJ 约定以有效点数和参数个数修正决定系数。
+ * @return 1-(SSE/SSD)*n/(n-p)；方差或自由度不足时返回 0，拟合失败返回 NaN。
+ */
 double CurveFitter::getFitGoodness() const
 {
     int df = objectiveCount_ - getNumParams();
@@ -720,6 +776,11 @@ double CurveFitter::getFitGoodness() const
         : variance_ > 0 && df > 0 ? 1 - sse_ / variance_ * objectiveCount_ / df
                                   : 0;
 }
+
+/**
+ * @brief 计算未加权残差的样本标准差，即去除残差均值后以 n-1 为分母。
+ * @return 残差标准差；少于两个点时返回 NaN。设置权重后不再与加权 SSE 直接对应。
+ */
 double CurveFitter::getSD() const
 {
     auto r = getResiduals();
@@ -730,6 +791,7 @@ double CurveFitter::getSD() const
         v += (z - mean) * (z - mean);
     return std::sqrt(v / (r.size() - 1));
 }
+
 QString CurveFitter::getResultString() const
 {
     QString r = getName() + "\n" + getFormula() + "\n" + message_;

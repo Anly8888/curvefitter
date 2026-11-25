@@ -1,5 +1,6 @@
 #include "curvefitter.h"
 #include <QTextStream>
+
 int main()
 {
     CurveFitter fitter({ 0, 1, 2, 3, 4 }, { 2, 5, 8, 11, 14 });

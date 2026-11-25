@@ -3,16 +3,19 @@
 #include <iostream>
 #include <stdexcept>
 static int checks = 0;
+
 void check(bool ok, const char* message)
 {
     ++checks;
     if (!ok)
         throw std::runtime_error(message);
 }
+
 void near(double a, double b, double tol = 1e-6)
 {
     check(std::isfinite(a) && std::abs(a - b) < tol, "Numerical mismatch");
 }
+
 int main()
 {
     try

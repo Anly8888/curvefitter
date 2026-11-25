@@ -42,6 +42,7 @@ public:
         ERF,
         CUSTOM = 100,
     };
+
     /**
      * @brief 本库的拟合状态，数值不对应 Java Minimizer 状态。
      */
@@ -51,6 +52,7 @@ public:
         INITIALIZATION_FAILURE,
         MAX_ITERATIONS,
     };
+
     using Parameters = QVector<double>;
     using UserFunction = std::function<double(const Parameters&, double)>;
 
@@ -59,8 +61,11 @@ public:
     void doFit(int type);
     void doCustomFit(UserFunction function, int count, const QString& formula,
         const Parameters& initial, const Parameters& variations = { });
+
     void setInitialParameters(const Parameters& p) { initial_ = p; }
+
     void setInitialParamVariations(const Parameters& p) { variations_ = p; }
+
     // Weights refer to the original input, including any NaN pairs removed by the constructor.
     void setWeights(const QVector<double>& weights);
     void setMaxIterations(int n);
@@ -68,16 +73,25 @@ public:
     void setRestarts(int n);
 
     Parameters getParams() const { return params_; } // parameters followed by objective SSE
+
     QVector<double> getResiduals() const;
+
     QVector<double> getXPoints() const { return x_; }
+
     QVector<double> getYPoints() const { return y_; }
+
     double getSumResidualsSqr() const { return sse_; }
+
     double getRSquared() const;
     double getFitGoodness() const;
     double getSD() const;
+
     int getStatus() const { return status_; }
+
     QString getStatusString() const { return message_; }
+
     int getIterations() const { return iterations_; }
+
     int getNumParams() const;
     QString getName() const;
     QString getFormula() const;
