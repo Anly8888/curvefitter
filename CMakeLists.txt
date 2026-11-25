@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(CurveFitter VERSION 1.0 LANGUAGES CXX)
 
 option(CURVEFITTER_ENABLE_STRING_FORMULAS "Enable string formulas using Qt Qml" OFF)
+option(CURVEFITTER_BUILD_SHARED "Build CurveFitter as a shared library" OFF)
 option(CURVEFITTER_BUILD_EXAMPLES "Build the CurveFitter example program" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -10,8 +11,24 @@ find_package(Threads REQUIRED)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
 
-add_library(curvefitter src/curvefitter.cpp src/minimizer.cpp)
-target_include_directories(curvefitter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+if(CURVEFITTER_BUILD_SHARED)
+    set(curvefitter_library_type SHARED)
+else()
+    set(curvefitter_library_type STATIC)
+endif()
+
+add_library(curvefitter ${curvefitter_library_type} src/curvefitter.cpp src/minimizer.cpp)
+if(CURVEFITTER_BUILD_SHARED)
+    set_target_properties(curvefitter PROPERTIES
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN YES)
+endif()
+
+include(GenerateExportHeader)
+generate_export_header(curvefitter EXPORT_FILE_NAME curvefitterexport.h)
+target_include_directories(curvefitter PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(curvefitter PUBLIC Threads::Threads Qt${QT_VERSION_MAJOR}::Core)
 
 if(CURVEFITTER_ENABLE_STRING_FORMULAS)

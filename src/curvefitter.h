@@ -1,5 +1,6 @@
 #pragma once
 
+#include "curvefitterexport.h"
 #include "minimizer.h"
 
 #include <functional>
@@ -57,16 +58,16 @@ public:
         MAX_ITERATIONS = MAX_ITERATIONS_EXCEEDED,
     };
 
-    CurveFitter(const Array &x, const Array &y);
+    CURVEFITTER_EXPORT CurveFitter(const Array &x, const Array &y);
 
-    void doFit(int type);
-    void doCustomFit(UserFunction function,
-                     int count,
-                     const QString &formula,
-                     const Array &initial = {},
-                     const Array &variations = {});
+    CURVEFITTER_EXPORT void doFit(int type);
+    CURVEFITTER_EXPORT void doCustomFit(UserFunction function,
+                                        int count,
+                                        const QString &formula,
+                                        const Array &initial = {},
+                                        const Array &variations = {});
 #ifdef CURVEFITTER_ENABLE_STRING_FORMULAS
-    int doCustomFit(const QString &equation, const Array &initial = {});
+    CURVEFITTER_EXPORT int doCustomFit(const QString &equation, const Array &initial = {});
 #endif
     void setInitialParameters(const Array &p) { initialParams = p; }
 
@@ -76,22 +77,22 @@ public:
 
     Minimizer &getMinimizer() { return minimizer; }
 
-    void setOffsetMultiplySlopeParams(int offset, int multiply, int slope);
-    Array getParams();
-    Array getResiduals();
-    double getSumResidualsSqr();
-    double getSD();
-    double getRSquared();
-    double getFitGoodness();
+    CURVEFITTER_EXPORT void setOffsetMultiplySlopeParams(int offset, int multiply, int slope);
+    CURVEFITTER_EXPORT Array getParams();
+    CURVEFITTER_EXPORT Array getResiduals();
+    CURVEFITTER_EXPORT double getSumResidualsSqr();
+    CURVEFITTER_EXPORT double getSD();
+    CURVEFITTER_EXPORT double getRSquared();
+    CURVEFITTER_EXPORT double getFitGoodness();
     int getStatus() const { return linearRegressionUsed ? Minimizer::SUCCESS : minimizerStatus; }
 
-    QString getStatusString() const;
-    QString getResultString();
+    CURVEFITTER_EXPORT QString getStatusString() const;
+    CURVEFITTER_EXPORT QString getResultString();
     void setRestarts(int n) { minimizer.setMaxRestarts(n); }
 
     int getRestarts() const { return minimizer.getMaxRestarts(); }
 
-    void setMaxError(double error);
+    CURVEFITTER_EXPORT void setMaxError(double error);
     int getIterations() const { return linearRegressionUsed ? 1 : minimizer.getIterations(); }
 
     int getMaxIterations() const { return minimizer.getMaxIterations(); }
@@ -104,25 +105,25 @@ public:
 
     int getFit() const { return fitType; }
 
-    int getNumParams();
-    QString getName();
-    QString getFormula();
-    QString getMacroCode();
-    double f(double x);
-    double f(const Array &p, double x);
-    double userFunction(Array &p, double dummy);
-    static double f(int type, const Array &p, double x);
-    static int getNumParams(int type);
+    CURVEFITTER_EXPORT int getNumParams();
+    CURVEFITTER_EXPORT QString getName();
+    CURVEFITTER_EXPORT QString getFormula();
+    CURVEFITTER_EXPORT QString getMacroCode();
+    CURVEFITTER_EXPORT double f(double x);
+    CURVEFITTER_EXPORT double f(const Array &p, double x);
+    CURVEFITTER_EXPORT double userFunction(Array &p, double dummy);
+    static CURVEFITTER_EXPORT double f(int type, const Array &p, double x);
+    static CURVEFITTER_EXPORT int getNumParams(int type);
 #ifdef CURVEFITTER_ENABLE_STRING_FORMULAS
-    static int getNumParams(const QString &equation);
+    static CURVEFITTER_EXPORT int getNumParams(const QString &equation);
 #endif
-    static int getMax(const Array &values);
-    static int getFitCode(const QString &name);
-    static QStringList fitList();
-    static QStringList formulas();
-    static QStringList macroCodes();
-    static QVector<int> sortedTypes();
-    static QStringList getSortedFitList();
+    static CURVEFITTER_EXPORT int getMax(const Array &values);
+    static CURVEFITTER_EXPORT int getFitCode(const QString &name);
+    static CURVEFITTER_EXPORT QStringList fitList();
+    static CURVEFITTER_EXPORT QStringList formulas();
+    static CURVEFITTER_EXPORT QStringList macroCodes();
+    static CURVEFITTER_EXPORT QVector<int> sortedTypes();
+    static CURVEFITTER_EXPORT QStringList getSortedFitList();
     static constexpr int IterFactor{500};
 
 private:

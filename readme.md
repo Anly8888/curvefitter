@@ -24,6 +24,13 @@ ctest --test-dir build/Qt_5_15_15-Debug --output-on-failure
 
 同目录提供 `cmake` 与 `ctest`。已实测 Qt 5.15.15 / GCC 14；Qt 6 尚未实测。代码按仓库 `.clang-format` 格式化，并按 AGENTS 手动检查函数间距和逻辑分段。
 
+### 静态库与动态库
+
+默认构建静态库。配置时传入 `-DCURVEFITTER_BUILD_SHARED=ON` 可构建动态库。
+两种配置使用同一个 CMake 目标 `curvefitter`；链接该目标即可获得所需的公开头文件路径。
+动态库显式导出 `CurveFitter` 和 `Minimizer` 的公开非内联函数。
+在 Windows 上运行动态库版本时，需让系统能找到对应的 DLL。
+
 ### 可选：示例程序
 
 默认不构建示例，不影响库和单元测试。通过 `-DCURVEFITTER_BUILD_EXAMPLES=ON` 启用：

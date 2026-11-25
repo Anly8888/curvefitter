@@ -1,5 +1,7 @@
 #pragma once
 
+#include "curvefitterexport.h"
+
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -36,11 +38,12 @@ public:
 
     Minimizer() = default;
 
-    void setFunction(UserFunction function, int count);
-    int minimize(const Array &initialParams = {}, const Array &variations = {});
-    int minimizeOnce(const Array &initialParams = {}, const Array &variations = {});
-    Array getParams();
-    double getFunctionValue();
+    CURVEFITTER_EXPORT void setFunction(UserFunction function, int count);
+    CURVEFITTER_EXPORT int minimize(const Array &initialParams = {}, const Array &variations = {});
+    CURVEFITTER_EXPORT int minimizeOnce(const Array &initialParams = {},
+                                        const Array &variations = {});
+    CURVEFITTER_EXPORT Array getParams();
+    CURVEFITTER_EXPORT double getFunctionValue();
     int getIterations() const { return totalNumIter; }
 
     void setMaxIterations(int n) { maxIter = n; }
@@ -57,7 +60,7 @@ public:
 
     void setMaxError(double relative) { maxRelError = relative; }
 
-    void setMaxError(double relative, double absolute);
+    CURVEFITTER_EXPORT void setMaxError(double relative, double absolute);
     void setParamResolutions(const Array &resolutions) { paramResolutions = resolutions; }
 
     void setMaximumThreads(int n) { useSingleThread = n <= 1; }
@@ -66,7 +69,7 @@ public:
 
     void setExtraArrayElements(int count) { numExtraArrayElements = count; }
 
-    static QStringList statusStrings();
+    static CURVEFITTER_EXPORT QStringList statusStrings();
 
 private:
     /**
