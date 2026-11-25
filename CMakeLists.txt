@@ -1,13 +1,25 @@
 cmake_minimum_required(VERSION 3.16)
 project(CurveFitter VERSION 1.0 LANGUAGES CXX)
+
+option(CURVEFITTER_ENABLE_STRING_FORMULAS "Enable string formulas using Qt Qml" OFF)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Qml)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Qml)
-add_library(curvefitter src/curvefitter.cpp src/minimizer.cpp src/customformula.cpp)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
+
+add_library(curvefitter src/curvefitter.cpp src/minimizer.cpp)
 target_include_directories(curvefitter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(curvefitter PUBLIC Threads::Threads Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Qml)
+target_link_libraries(curvefitter PUBLIC Threads::Threads Qt${QT_VERSION_MAJOR}::Core)
+
+if(CURVEFITTER_ENABLE_STRING_FORMULAS)
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Qml)
+    target_sources(curvefitter PRIVATE src/customformula.cpp)
+    target_link_libraries(curvefitter PRIVATE Qt${QT_VERSION_MAJOR}::Qml)
+    target_compile_definitions(curvefitter PUBLIC CURVEFITTER_ENABLE_STRING_FORMULAS=1)
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
     find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
@@ -17,5 +29,6 @@ if(BUILD_TESTING)
     target_compile_definitions(curvefitter_tests PRIVATE REFERENCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/java_reference.jsonl")
     add_test(NAME curvefitter_tests COMMAND curvefitter_tests)
 endif()
+
 add_executable(curvefitter_example examples/main.cpp)
 target_link_libraries(curvefitter_example PRIVATE curvefitter)

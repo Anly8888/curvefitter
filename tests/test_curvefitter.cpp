@@ -19,7 +19,9 @@ private slots:
     void javaReference_data();
     void javaReference();
     void customFunction();
+#ifdef CURVEFITTER_ENABLE_STRING_FORMULAS
     void formula();
+#endif
     void parallelSearch();
     void resolutionAndExtraElements();
     void resultReport();
@@ -143,6 +145,7 @@ void CurveFitterTest::customFunction()
     compareNumber(fitter.getParams()[2], 1);
 }
 
+#ifdef CURVEFITTER_ENABLE_STRING_FORMULAS
 void CurveFitterTest::formula()
 {
     CurveFitter fitter({0, 1, 2, 3}, {2, 5, 8, 11});
@@ -152,6 +155,7 @@ void CurveFitterTest::formula()
     QCOMPARE(fitter.doCustomFit("y = a +", {1}), 0);
     QCOMPARE(CurveFitter::getNumParams("y=a+Math.exp(b*x)"), 2);
 }
+#endif
 
 void CurveFitterTest::parallelSearch()
 {

@@ -65,7 +65,9 @@ public:
                      const QString &formula,
                      const Array &initial = {},
                      const Array &variations = {});
+#ifdef CURVEFITTER_ENABLE_STRING_FORMULAS
     int doCustomFit(const QString &equation, const Array &initial = {});
+#endif
     void setInitialParameters(const Array &p) { initialParams = p; }
 
     void setInitialParamVariations(const Array &p) { initialParamVariations = p; }
@@ -111,7 +113,9 @@ public:
     double userFunction(Array &p, double dummy);
     static double f(int type, const Array &p, double x);
     static int getNumParams(int type);
+#ifdef CURVEFITTER_ENABLE_STRING_FORMULAS
     static int getNumParams(const QString &equation);
+#endif
     static int getMax(const Array &values);
     static int getFitCode(const QString &name);
     static QStringList fitList();

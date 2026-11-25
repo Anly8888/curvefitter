@@ -4,9 +4,10 @@
 
 ## 构建与测试
 
-需要 C++17、CMake ≥ 3.16、Qt 5/6 Core、Qml；单元测试使用 Qt Test。不依赖 Qt Widgets。
+默认只需要 C++17、CMake ≥ 3.16 和 Qt 5/6 Core；单元测试使用 Qt Test。不依赖 Qt Widgets。
 
-Debian/Ubuntu 开发依赖为 `cmake qtbase5-dev qtdeclarative5-dev`。Java 仅用于重新生成对照数据，库及常规测试不需要 Java 或联网。
+使用 Qt 5 时，Debian/Ubuntu 的基础开发依赖为 `cmake qtbase5-dev`。
+Java 仅用于重新生成对照数据，库及常规测试不需要 Java 或联网。
 
 ```sh
 cmake -S . -B build/Qt_5_15_15-Debug -DCMAKE_BUILD_TYPE=Debug
@@ -23,6 +24,16 @@ ctest --test-dir build/Qt_5_15_15-Debug --output-on-failure
 ```
 
 同目录提供 `cmake` 与 `ctest`。已实测 Qt 5.15.15 / GCC 14；Qt 6 尚未实测。代码按仓库 `.clang-format` 格式化，并按 AGENTS 手动检查函数间距和逻辑分段。
+
+### 可选：字符串公式
+
+仅在需要执行字符串公式时启用 `-DCURVEFITTER_ENABLE_STRING_FORMULAS=ON`。
+启用时需要与 Qt Core 同版本的 Qt Qml 开发包（Debian/Ubuntu 上 Qt 5 对应 `qtdeclarative5-dev`）。
+
+该选项默认关闭。关闭时不查找或链接 Qt Qml，且不提供接受字符串公式的
+`doCustomFit()` 和 `getNumParams()` 重载。使用 CMake 链接 `curvefitter` 的调用方
+可通过 `#ifdef CURVEFITTER_ENABLE_STRING_FORMULAS` 检查该能力。
+内置模型、`Minimizer` 和 C++ 回调形式的自定义拟合不受影响。
 
 ## 拟合接口
 
@@ -63,7 +74,7 @@ CMake 集成：`add_subdirectory(curvefitter)` 后链接 `curvefitter`。支持�
 
 - 不移植设置弹窗、进度显示、键盘中止或绘图界面。初值和算法配置由调用方通过数值 API 设置，
   取消拟合使用 `Minimizer::abort()`。调用方可用 `f(x)` 采样并自行绘图。
-- `doCustomFit("y=a+b*Math.exp(c*x)", initial)` 使用 Qt `QJSEngine` 执行数值公式。
+- 启用字符串公式后，`doCustomFit("y=a+b*Math.exp(c*x)", initial)` 使用 Qt `QJSEngine` 执行公式。
   支持常用数学函数，参数按原版 `a...f` 识别；公式拟合强制单线程。
   不提供 ImageJ 图像处理、窗口、插件命令或完整宏运行时。
 - 报告保留原版统计项；数字文本格式使用 Qt。C++ 数组采用值语义。
@@ -76,7 +87,7 @@ CMake 集成：`add_subdirectory(curvefitter)` 后链接 `curvefitter`。支持�
 
 `tests/java_reference.jsonl` 包含由未修改 Java 源码生成的 86 组结果：全部 25 种模型各有默认初值、显式初值、加权三组案例，另有退化直线、负 y 指数、含原点的幂回归、NaN 清洗，以及覆盖全部六个状态的独立 Minimizer 案例。QTest 比较状态、参数、SSE、残差和统计值；六个单线程优化器案例额外精确比较迭代数与完成次数。双精度数值采用绝对/相对容差 `1e-5`，不把跨语言浮点末位视为算法偏差。
 
-另外使用 QTest 验证并行搜索、参数分辨率、额外数组元素、自定义回调与公式和结果报告。
+另外使用 QTest 验证并行搜索、参数分辨率、额外数组元素、自定义回调和结果报告；启用字符串公式时也验证其解析和拟合。
 
 使用 JDK 21 可从固定提交重建并核验基准：
 
